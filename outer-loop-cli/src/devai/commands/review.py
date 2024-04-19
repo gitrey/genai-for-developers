@@ -18,13 +18,13 @@ from devai.util.file_processor import format_files_as_string
 from vertexai.generative_models import GenerativeModel, ChatSession
 from google.cloud.aiplatform import telemetry
 
+# Uncomment after configuring JIRA and GitLab env variables - see README.md for details
+from devai.commands.jira import create_jira_issue
+from devai.commands.gitlab import create_gitlab_issue_comment
+
 USER_AGENT = 'cloud-solutions/genai-for-developers-v1'
 model_name="gemini-1.5-pro-preview-0409"
 
-# Uncomment after configuring JIRA and GitLab env variables - see README.md for details
-
-# from devai.commands.jira import create_jira_issue
-# from devai.commands.gitlab import create_gitlab_issue_comment
 
 @click.command(name='code')
 @click.option('-c', '--context', required=False, type=str, default="")
@@ -65,8 +65,8 @@ No Issues:  If your review uncovers no significant areas for improvement, state 
 
     click.echo(f"Response from Model: {response.text}")
 
-    #create_jira_issue("Code Review Results", response.text)
-    # create_gitlab_issue_comment(response.text)
+    create_jira_issue("Code Review Results", response.text)
+    create_gitlab_issue_comment(response.text)
 
 
 @click.command()
