@@ -178,7 +178,7 @@ Provide report which files and methods that test coverage and ones that are miss
     click.echo(f"Response from Model: {response.text}")
 
     create_jira_issue("Code Coverage Review Results", response.text)
-    # create_gitlab_issue_comment(response.text)
+    create_gitlab_issue_comment(response.text)
 
 @click.group()
 def review():
