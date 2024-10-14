@@ -175,7 +175,6 @@ public final class BalanceReaderController {
         }
     }
 
-    // add an endpoint to return list of accounts
     @GetMapping("/accounts")
     public ResponseEntity<?> getAccounts(
         @RequestHeader("Authorization") String bearerToken) {
