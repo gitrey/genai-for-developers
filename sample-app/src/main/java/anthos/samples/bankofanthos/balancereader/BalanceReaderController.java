@@ -174,4 +174,29 @@ public final class BalanceReaderController {
                 HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    // add an endpoint to return list of accounts
+    @GetMapping("/accounts")
+    public ResponseEntity<?> getAccounts(
+        @RequestHeader("Authorization") String bearerToken) {
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            // Check that the authenticated user can access this account.
+            String accountId = jwt.getClaim("acct").asString();
+            // Load from cache
+            Long balance = cache.get(accountId);
+            return new ResponseEntity<Long>(balance, HttpStatus.OK);
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to retrieve account balance: not authorized");
+            return new ResponseEntity<>("not authorized",
+                HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error",
+                HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 }
