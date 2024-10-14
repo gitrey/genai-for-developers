@@ -18,6 +18,7 @@ from devai.util.file_processor import format_files_as_string
 from vertexai.generative_models import (
     GenerativeModel,
     Image,
+    Part
 )
 from google.cloud.aiplatform import telemetry
 import os
@@ -32,9 +33,12 @@ from json_repair import repair_json
 from rich.console import Console 
 from rich.table import Table
 
-USER_AGENT = 'cloud-solutions/genai-for-developers-v1.0'
+# Uncomment after configuring JIRA and GitLab env variables - see README.md for details
 
-model_name="gemini-1.5-pro"
+# from devai.commands.jira import create_jira_issue
+# from devai.commands.gitlab import create_gitlab_issue_comment
+
+from .constants import USER_AGENT, MODEL_NAME
 
 
 def ensure_env_variable(var_name):
@@ -117,11 +121,6 @@ def validate_and_correct_json(json_text):
                 "Error: Model output is not valid JSON and could not be repaired."
             )
             return None
-
-# Uncomment after configuring JIRA and GitLab env variables - see README.md for details
-
-# from devai.commands.jira import create_jira_issue
-# from devai.commands.gitlab import create_gitlab_issue_comment
 
 @click.command(name='code')
 @click.option('-c', '--context', required=False, type=str, default="")
@@ -295,9 +294,9 @@ Provide an overview or overall impression entry for the code as the first entry.
     # Load files as text into the source variable
     source = source.format(format_files_as_string(context))
 
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
-        code_chat = code_chat_model.start_chat()
+        code_chat = code_chat_model.start_chat(response_validation=False)
         code_chat.send_message(qry)
         response = code_chat.send_message(source)
 
@@ -434,9 +433,9 @@ def performance(context):
     # Load files as text into source variable
     source=source.format(format_files_as_string(context))
 
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
-        code_chat = code_chat_model.start_chat()
+        code_chat = code_chat_model.start_chat(response_validation=False)
         code_chat.send_message(qry)
         response = code_chat.send_message(source)
 
@@ -538,9 +537,9 @@ def security(context):
     # Load files as text into source variable
     source=source.format(format_files_as_string(context))
     
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
-        code_chat = code_chat_model.start_chat()
+        code_chat = code_chat_model.start_chat(response_validation=False)
         code_chat.send_message(qry)
         response = code_chat.send_message(source)
 
@@ -627,9 +626,9 @@ def testcoverage(context):
     # Load files as text into source variable
     source=source.format(format_files_as_string(context))
     
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
-        code_chat = code_chat_model.start_chat()
+        code_chat = code_chat_model.start_chat(response_validation=False)
         code_chat.send_message(qry)
         response = code_chat.send_message(source)
 
@@ -683,9 +682,9 @@ def blockers(context):
     # Load files as text into source variable
     source=source.format(format_files_as_string(context))
     
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
-        code_chat = code_chat_model.start_chat()
+        code_chat = code_chat_model.start_chat(response_validation=False)
         code_chat.send_message(qry)
         response = code_chat.send_message(source)
 
@@ -723,29 +722,30 @@ def impact(current, target):
     if qry is None:
         qry='''
         INSTRUCTIONS:
-        You need to analyze two versions of a codebase and provide impact analysis tht will help with migration from current version to target version.
-        I have two versions of a codebase: [CURRENT] and [TARGET].
+        You need to analyze two versions of a codebase and provide impact analysis that will help with migration from current version to target version.
+        You have two versions of a codebase: [CURRENT] and [TARGET].
+        Its possible that TARGET code does not exist, if thats the case, review CURRENT code only.
 
         Please perform a detailed impact analysis comparing these versions. Specifically, I need you to:
 
-        Identify the changes:
+        Step 1) Identify the changes:
         List all files modified, added, or deleted between the two versions.
         For each modified file, highlight the specific lines of code that were changed.
-        Categorize the changes:
+        
+        Step 2) Categorize the changes:
         Classify the changes into categories like bug fixes, new features, performance improvements, refactoring, etc.
         Provide a brief explanation for each category.
-        Analyze the impact:
+        
+        Step 3) Analyze the impact:
         For each change, explain its potential impact on the application's functionality, performance, security, and any other relevant aspects.
         Identify any potential risks or regressions introduced by the changes.
-        Suggest testing areas:
-        Based on the analysis, recommend specific areas of the application that require thorough testing to ensure the changes haven't introduced any unexpected behavior.
-        Provide code snippets:
+        
+        Step 4) Provide code snippets:
         Whenever possible, include relevant code snippets to illustrate the changes and their potential impact.
         Please present your analysis in a clear and concise manner, using Markdown formatting for readability.
 
-        Optional:
-
-        If you have access to the repository history, you can analyze the commit messages and pull requests associated with the changes for additional context.
+        Step 5) Suggest testing areas:
+        Based on the analysis, recommend specific areas of the application that require thorough testing to ensure the changes haven't introduced any unexpected behavior.
         If the codebase has unit tests, you can suggest which tests need to be updated or created based on your analysis.
 
         '''
@@ -754,9 +754,9 @@ def impact(current, target):
     current_source=current_source.format(format_files_as_string(current))
     target_source=target_source.format(format_files_as_string(target))
     
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
-        code_chat = code_chat_model.start_chat()
+        code_chat = code_chat_model.start_chat(response_validation=False)
         code_chat.send_message(qry)
         response = code_chat.send_message(current_source)
         response = code_chat.send_message(target_source)
@@ -779,11 +779,11 @@ def imgdiff(current, target):
     """
 
     before_state='''
-    BEFORE UPGRADE STATE: 
+    IMAGE 1: 
 
     '''
     after_state='''
-    AFTER UPGRADE STATE:
+    IMAGE 2:
 
     '''
     qry = get_prompt('review_query')
@@ -791,14 +791,15 @@ def imgdiff(current, target):
     if qry is None:
         qry='''
         INSTRUCTIONS:
-        Analyze images of the Web page and write the report about what UI elements are missing between the two images.
-        Explain how you reached this decision.
+        Meticulously examine the two provided images. Generate a comprehensive report detailing the specific 
+        elements absent from each image in comparison to the other.  Clearly articulate the reasoning and 
+        methodology employed to arrive at your conclusions.
         '''
     
     contents = [qry, after_state, load_image_from_path(current),
                 before_state, load_image_from_path(target)]
 
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
         responses = code_chat_model.generate_content(contents, stream=True)
 
@@ -827,7 +828,44 @@ def image(file, prompt):
     
     contents = [qry, load_image_from_path(file)]
 
-    code_chat_model = GenerativeModel(model_name)
+    code_chat_model = GenerativeModel(MODEL_NAME)
+    with telemetry.tool_context_manager(USER_AGENT):
+        responses = code_chat_model.generate_content(contents, stream=True)
+
+    for response in responses:
+        print(response.text, end="")
+
+@click.command(name='video')
+@click.option('-f', '--file', required=True, type=str, default="")
+@click.option('-p', '--prompt', required=True, type=str, default="")
+def video(file, prompt):
+    """
+    This function performs a video analysis using the Generative Model API.
+
+    Args:
+        file (str): path to video.
+        prompt (str): question about video.
+    """
+
+    qry = get_prompt('review_query')
+
+    if qry is None:
+        qry=f'''
+        INSTRUCTIONS:
+        {prompt}
+        '''
+
+    with open(file, "rb") as f:
+        video_data = f.read()
+
+    video = Part.from_data(
+        data=video_data,
+        mime_type="video/mp4",
+    )
+
+    contents = [qry, video]
+
+    code_chat_model = GenerativeModel(MODEL_NAME)
     with telemetry.tool_context_manager(USER_AGENT):
         responses = code_chat_model.generate_content(contents, stream=True)
 
@@ -849,4 +887,4 @@ review.add_command(blockers)
 review.add_command(impact)
 review.add_command(imgdiff)
 review.add_command(image)
-
+review.add_command(video)
