@@ -8,6 +8,7 @@ In this repository you will find samples, demos and tutorials to help developers
 
 The contents of this repository should not be considered an official google product. The materials are provided for educational purposes only.
 
+
 ## Integrations
 # [DevAI VS Code Extension](./devai-vscode-extension/)
 
