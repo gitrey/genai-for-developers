@@ -1,19 +1,3 @@
-/*
- * Copyright 2020, Google LLC.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package anthos.samples.bankofanthos.balancereader;
 
 import com.auth0.jwt.JWTVerifier;
@@ -30,11 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * REST service to retrieve the current balance for the authenticated user.
@@ -172,6 +152,32 @@ public final class BalanceReaderController {
             LOGGER.error("Cache error");
             return new ResponseEntity<>("cache error",
                 HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PutMapping("/balances/{accountId}")
+    public ResponseEntity<?> updateBalance(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestBody Long amount) {
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to update account balance: not authorized");
+                return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+            }
+            Long currentBalance = cache.get(accountId);
+            cache.put(accountId, currentBalance + amount);
+            return new ResponseEntity<>(HttpStatus.OK);
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to update account balance: not authorized");
+            return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }
