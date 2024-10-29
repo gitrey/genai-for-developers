@@ -30,11 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * REST service to retrieve the current balance for the authenticated user.
@@ -172,6 +168,31 @@ public final class BalanceReaderController {
             LOGGER.error("Cache error");
             return new ResponseEntity<>("cache error",
                 HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @PutMapping("/balances/{accountId}")
+    public ResponseEntity<?> updateBalance(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestBody Long newBalance) {
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to update account balance: not authorized");
+                return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+            }
+            cache.put(accountId, newBalance);
+            return new ResponseEntity<>("Balance updated successfully", HttpStatus.OK);
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to update account balance: not authorized");
+            return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+        } catch (Exception e) {
+            LOGGER.error("Failed to update account balance: " + e.getMessage());
+            return new ResponseEntity<>("Failed to update balance", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }
