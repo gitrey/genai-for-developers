@@ -30,11 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * REST service to retrieve the current balance for the authenticated user.
@@ -173,5 +169,18 @@ public final class BalanceReaderController {
             return new ResponseEntity<>("cache error",
                 HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    @PutMapping("/balances/{accountId}")
+    public ResponseEntity<?> updateBalance(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestBody Long amount) {
+        // Add your update balance logic here.  For example:
+        // 1. Verify JWT token.
+        // 2. Check authorization.
+        // 3. Update the balance in the cache.
+        // 4. Return appropriate HTTP status code.
+        return new ResponseEntity<>("Not implemented", HttpStatus.NOT_IMPLEMENTED);
     }
 }
