@@ -116,7 +116,7 @@ public final class BalanceReaderController {
     @GetMapping("/ready")
     @ResponseStatus(HttpStatus.OK)
     public String readiness() {
-        return "ok";
+        return "READY";
     }
 
     /**
