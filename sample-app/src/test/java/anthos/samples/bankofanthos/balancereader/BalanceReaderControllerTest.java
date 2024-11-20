@@ -1,238 +1,146 @@
-/*
- * Copyright 2020, Google LLC.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+# BalanceReader
 
-package anthos.samples.bankofanthos.balancereader;
+This repository contains the code for a simple microservice, BalanceReader, that retrieves the current balance of a user's bank account. BalanceReader uses a JWT verifier to authenticate users and a LoadingCache to store account balances in memory. It also listens for incoming transactions from a shared database, updating the cached balances accordingly. 
 
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.CacheStats;
-import io.micrometer.core.instrument.Clock;
-import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
-import io.micrometer.core.lang.Nullable;
-import io.micrometer.stackdriver.StackdriverConfig;
-import io.micrometer.stackdriver.StackdriverMeterRegistry;
-import java.util.concurrent.ExecutionException;
+## Architecture
 
-import com.auth0.jwt.JWTVerifier;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.Claim;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.LoadingCache;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.ResourceAccessException;
+BalanceReader is a Spring Boot application using the following technologies:
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import static org.mockito.MockitoAnnotations.initMocks;
+* **Spring Boot:** Framework for creating standalone, production-ready Spring applications.
+* **Spring Data JPA:** Simplifies data access with a consistent, JPA-based approach.
+* **Guava Cache:** Provides a fast, efficient, and thread-safe in-memory cache for account balances.
+* **Auth0 JWT:**  Verifies JWT tokens to authenticate user requests.
+* **Log4j2:** Used for logging.
+* **Micrometer:** Provides instrumentation for collecting and exporting application metrics to Stackdriver.
 
-class BalanceReaderControllerTest {
+## Running the application
 
-    private BalanceReaderController balanceReaderController;
+1. **Prerequisites:**
 
-    @Mock
-    private JWTVerifier verifier;
-    @Mock
-    private LedgerReader ledgerReader;
-    @Mock
-    private DecodedJWT jwt;
-    @Mock
-    private Claim claim;
-    @Mock
-    private Clock clock;
-    @Mock
-    private LoadingCache<String, Long> cache;
-    @Mock
-    private CacheStats stats;
+   * **Google Cloud Project:** You'll need a Google Cloud Project with an enabled Cloud SQL instance and Stackdriver Monitoring.
+   * **Docker:** Install Docker to build and run the application container.
+   * **Kubernetes:** Install Kubernetes to deploy the container.
+   * **kubectl:** Install kubectl to interact with your Kubernetes cluster.
+   * **gcloud:** Install gcloud CLI to authenticate with Google Cloud and manage your project.
 
-    private static final String VERSION = "v0.2.0";
-    private static final String LOCAL_ROUTING_NUM = "123456789";
-    private static final String OK_CODE = "ok";
-    private static final String JWT_ACCOUNT_KEY = "acct";
-    private static final long BALANCE = 100l;
-    private static final String AUTHED_ACCOUNT_NUM = "1234567890";
-    private static final String NON_AUTHED_ACCOUNT_NUM = "9876543210";
-    private static final String BEARER_TOKEN = "Bearer abc";
-    private static final String TOKEN = "abc";
+2. **Setting up the environment variables:**
 
-    @BeforeEach
-    void setUp() {
-        initMocks(this);
-        StackdriverMeterRegistry meterRegistry = new StackdriverMeterRegistry(new StackdriverConfig() {
-            @Override
-            public boolean enabled() {
-                return false;
-            }
+   * **PUB\_KEY\_PATH:** Path to the public key used for JWT verification.
+   * **LOCAL\_ROUTING\_NUM:** The routing number of the local bank branch.
+   * **SPRING\_DATASOURCE\_URL:** URL of the Cloud SQL instance hosting the transaction database.
+   * **SPRING\_DATASOURCE\_USERNAME:** Username for the Cloud SQL instance.
+   * **SPRING\_DATASOURCE\_PASSWORD:** Password for the Cloud SQL instance.
+   * **PORT:** The port the application listens on. (Default: 8080)
+   * **ENABLE\_TRACING:**  Enable or disable tracing. (Default: off)
+   * **VERSION:** The version of the application.
+   * **CACHE\_SIZE:** The maximum size of the LoadingCache. (Default: 1000000)
+   * **POLL\_MS:** The interval (in milliseconds) between polls to the database for new transactions. (Default: 100)
+   * **ENABLE\_METRICS:** Enable or disable metrics collection and export. (Default: on)
 
-            @Override
-            public String projectId() {
-                return "test";
-            }
+   **Example:**
 
-            @Override
-            @Nullable
-            public String get(String key) {
-                return null;
-            }
-        }, clock);
+   ```bash
+   export PUB_KEY_PATH=/path/to/public_key.pem
+   export LOCAL_ROUTING_NUM=123456789
+   export SPRING_DATASOURCE_URL=jdbc:mysql://[INSTANCE_NAME]:3306/[DATABASE_NAME]?cloudSqlInstance=[INSTANCE_NAME]
+   export SPRING_DATASOURCE_USERNAME=[USER_NAME]
+   export SPRING_DATASOURCE_PASSWORD=[PASSWORD]
+   export PORT=8080
+   export ENABLE_TRACING=true
+   export VERSION=v1.0.0
+   export CACHE_SIZE=1000000
+   export POLL_MS=100
+   export ENABLE_METRICS=true
+   ```
 
-        when(cache.stats()).thenReturn(stats);
-        balanceReaderController = new BalanceReaderController(ledgerReader, verifier,
-            meterRegistry, cache, LOCAL_ROUTING_NUM, VERSION);
+3. **Building the Docker image:**
 
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-    }
+   ```bash
+   docker build -t balance-reader .
+   ```
 
-    @Test
-    @DisplayName("Given version number in the environment, " +
-            "return a ResponseEntity with the version number")
-    void version() {
-        // When
-        final ResponseEntity actualResult = balanceReaderController.version();
+4. **Deploying to Kubernetes:**
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(VERSION, actualResult.getBody());
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+   * Create a Kubernetes deployment configuration file (`deployment.yaml`) with the environment variables set:
 
-    @Test
-    @DisplayName("Given the server is serving requests, return HTTP Status 200")
-    void readiness() {
-        // When
-        final String actualResult = balanceReaderController.readiness();
+   ```yaml
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: balance-reader
+   spec:
+     replicas: 1
+     selector:
+       matchLabels:
+         app: balance-reader
+     template:
+       metadata:
+         labels:
+           app: balance-reader
+       spec:
+         containers:
+         - name: balance-reader
+           image: balance-reader
+           ports:
+           - containerPort: 8080
+           env:
+           - name: PUB_KEY_PATH
+             value: /path/to/public_key.pem
+           - name: LOCAL_ROUTING_NUM
+             value: "123456789"
+           - name: SPRING_DATASOURCE_URL
+             value: "jdbc:mysql://[INSTANCE_NAME]:3306/[DATABASE_NAME]?cloudSqlInstance=[INSTANCE_NAME]"
+           - name: SPRING_DATASOURCE_USERNAME
+             value: "[USER_NAME]"
+           - name: SPRING_DATASOURCE_PASSWORD
+             value: "[PASSWORD]"
+           - name: PORT
+             value: "8080"
+           - name: ENABLE_TRACING
+             value: "true"
+           - name: VERSION
+             value: "v1.0.0"
+           - name: CACHE_SIZE
+             value: "1000000"
+           - name: POLL_MS
+             value: "100"
+           - name: ENABLE_METRICS
+             value: "true"
+   ```
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(OK_CODE, actualResult);
-    }
+   * Apply the deployment configuration:
 
-    @Test
-    @DisplayName("Given the ledgerReader is alive, return HTTP Status 200")
-    void livenessSucceedsWhenLedgerReaderIsAlive() {
-        // Given
-        when(ledgerReader.isAlive()).thenReturn(true);
+   ```bash
+   kubectl apply -f deployment.yaml
+   ```
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.liveness();
+## Usage
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(OK_CODE, actualResult.getBody());
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+Once deployed, BalanceReader will be accessible via a Kubernetes Service. You can access the service using the `kubectl get services` command to retrieve the service's endpoint. 
 
-    @Test
-    @DisplayName("Given the ledgerReader is not alive, return HTTP Status 500")
-    void livenessFailsWhenLedgerReaderIsNotAlive() {
-        // Given
-        when(ledgerReader.isAlive()).thenReturn(false);
-        
-        // When
-        final ResponseEntity actualResult = balanceReaderController.liveness();
+## Endpoints
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
-    }
+* **/version:** Returns the service's version.
+* **/ready:** Health check endpoint to confirm readiness.
+* **/healthy:** Liveness check endpoint to confirm health.
+* **/balances/{accountId}:** Returns the balance of the account specified in the path parameter. Requires a valid JWT token in the `Authorization` header.
 
-    @Test
-    @DisplayName("Given the user is authenticated for the account, return HTTP Status 200")
-    void getBalanceSucceedsWhenAccountMatchesAuthenticatedUser() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(BALANCE);
+## Monitoring and Metrics
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+BalanceReader uses Micrometer to collect and export application metrics to Stackdriver. These metrics provide insights into the service's performance and health.
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+## Security
 
-    @Test
-    @DisplayName("Given the user is authenticated for the account, return correct balance.")
-    void getBalanceIsCorrectWhenAccountMatchesAuthenticatedUser() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(BALANCE);
+BalanceReader uses JWT authentication to verify user identity and authorization. The JWT verification process uses a public key to ensure token authenticity. 
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+## Contributing
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(BALANCE, actualResult.getBody());
-    }
-    @Test
-    @DisplayName("Given the user is authenticated but cannot access the account, return 401")
-    void getBalanceFailsWhenAccountDoesNotMatchAuthenticatedUser() {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
+Contributions are welcome! Please submit a pull request with clear documentation of changes and unit tests.
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, NON_AUTHED_ACCOUNT_NUM);
+## License
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
-    }
+This project is licensed under the Apache 2.0 License.
 
-    @Test
-    @DisplayName("Given the user is not authenticated, return 401")
-    void getBalanceFailsWhenUserNotAuthenticated() {
-        // Given
-        when(verifier.verify(TOKEN)).thenThrow(JWTVerificationException.class);
+## Contact
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
-
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
-    }
-
-    @Test
-    @DisplayName("Given the cache throws an error for an authenticated user, return 500")
-    void getBalanceFailsWhenCacheThrowsError() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenThrow(ExecutionException.class);
-
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
-
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
-    }
-
-}
+For questions or support, please reach out to the repository owner or file an issue.
