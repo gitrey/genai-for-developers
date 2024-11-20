@@ -37,7 +37,7 @@ jobs:
           project_id: '${{ secrets.PROJECT_ID }}'
       - name: Docs update with PR
         run: echo '## Docs Update Results 🚀' >> $GITHUB_STEP_SUMMARY
-      - run: echo "$(devai document readme -c ${{ github.workspace }}/sample-app/src) -f 'sample-app/README.md' -b 'feature/docs-update'" >> $GITHUB_STEP_SUMMARY
+      - run: echo "$(devai document readme -c ${{ github.workspace }}/sample-app/src -f 'sample-app/README.md' -b 'feature/docs-update')" >> $GITHUB_STEP_SUMMARY
         shell: bash
         
       - name: Test Coverage Review
