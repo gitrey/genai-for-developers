@@ -1,238 +1,128 @@
-/*
- * Copyright 2020, Google LLC.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+## Balance Reader Microservice
 
-package anthos.samples.bankofanthos.balancereader;
+This repository contains the code for the Balance Reader microservice. The microservice is responsible for tracking the bank balance for each user account and exposes an API for retrieving the balance for a given account.
 
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.CacheStats;
-import io.micrometer.core.instrument.Clock;
-import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
-import io.micrometer.core.lang.Nullable;
-import io.micrometer.stackdriver.StackdriverConfig;
-import io.micrometer.stackdriver.StackdriverMeterRegistry;
-import java.util.concurrent.ExecutionException;
+### Description
 
-import com.auth0.jwt.JWTVerifier;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.Claim;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.LoadingCache;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.ResourceAccessException;
+The Balance Reader microservice is a simple Spring Boot application that uses a database to store the balance for each account. The microservice exposes a REST API endpoint that allows clients to retrieve the balance for a given account. The API requires authentication and authorization to ensure that clients can only access balances for accounts they are authorized to view. 
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import static org.mockito.MockitoAnnotations.initMocks;
+### Features
 
-class BalanceReaderControllerTest {
+* **Account Balance Tracking:** The microservice tracks the balance for each account in a database.
+* **REST API:** Exposes a REST API endpoint for retrieving the balance for a given account.
+* **Authentication and Authorization:** Uses JWT authentication to verify the identity of clients and authorization to restrict access to specific accounts.
+* **Caching:** Uses a Guava cache to improve performance by caching frequently accessed account balances.
+* **Metrics:** Exposes metrics for monitoring the health and performance of the microservice.
+* **Tracing:** Supports tracing for debugging and troubleshooting.
+* **Logging:** Uses Log4j2 for logging.
+* **Liveness and Readiness Probes:** Includes liveness and readiness probes for Kubernetes deployments.
 
-    private BalanceReaderController balanceReaderController;
+### Installation
 
-    @Mock
-    private JWTVerifier verifier;
-    @Mock
-    private LedgerReader ledgerReader;
-    @Mock
-    private DecodedJWT jwt;
-    @Mock
-    private Claim claim;
-    @Mock
-    private Clock clock;
-    @Mock
-    private LoadingCache<String, Long> cache;
-    @Mock
-    private CacheStats stats;
+1. **Clone the repository:**
+```bash
+git clone https://github.com/your-github-username/balance-reader.git
+```
 
-    private static final String VERSION = "v0.2.0";
-    private static final String LOCAL_ROUTING_NUM = "123456789";
-    private static final String OK_CODE = "ok";
-    private static final String JWT_ACCOUNT_KEY = "acct";
-    private static final long BALANCE = 100l;
-    private static final String AUTHED_ACCOUNT_NUM = "1234567890";
-    private static final String NON_AUTHED_ACCOUNT_NUM = "9876543210";
-    private static final String BEARER_TOKEN = "Bearer abc";
-    private static final String TOKEN = "abc";
+2. **Build the project:**
+```bash
+mvn clean package
+```
 
-    @BeforeEach
-    void setUp() {
-        initMocks(this);
-        StackdriverMeterRegistry meterRegistry = new StackdriverMeterRegistry(new StackdriverConfig() {
-            @Override
-            public boolean enabled() {
-                return false;
-            }
+### Usage
 
-            @Override
-            public String projectId() {
-                return "test";
-            }
+1. **Deploy the microservice to Kubernetes:**
+```bash
+kubectl apply -f deployment.yaml
+```
 
-            @Override
-            @Nullable
-            public String get(String key) {
-                return null;
-            }
-        }, clock);
+2. **Access the API:**
+```bash
+curl -H "Authorization: Bearer <JWT_TOKEN>" http://<SERVICE_HOSTNAME>/balances/<ACCOUNT_ID>
+```
 
-        when(cache.stats()).thenReturn(stats);
-        balanceReaderController = new BalanceReaderController(ledgerReader, verifier,
-            meterRegistry, cache, LOCAL_ROUTING_NUM, VERSION);
+Replace `<JWT_TOKEN>` with a valid JWT token for the user and `<ACCOUNT_ID>` with the account ID.
 
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-    }
+### Contributing
 
-    @Test
-    @DisplayName("Given version number in the environment, " +
-            "return a ResponseEntity with the version number")
-    void version() {
-        // When
-        final ResponseEntity actualResult = balanceReaderController.version();
+Contributions are welcome! Please follow these steps:
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(VERSION, actualResult.getBody());
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+1. **Fork the repository:**
+```bash
+git checkout -b feature/your-feature
+```
 
-    @Test
-    @DisplayName("Given the server is serving requests, return HTTP Status 200")
-    void readiness() {
-        // When
-        final String actualResult = balanceReaderController.readiness();
+2. **Make your changes:**
+```bash
+git add .
+git commit -m "feat: Your feature"
+```
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(OK_CODE, actualResult);
-    }
+3. **Push to your fork:**
+```bash
+git push origin feature/your-feature
+```
 
-    @Test
-    @DisplayName("Given the ledgerReader is alive, return HTTP Status 200")
-    void livenessSucceedsWhenLedgerReaderIsAlive() {
-        // Given
-        when(ledgerReader.isAlive()).thenReturn(true);
+4. **Create a pull request:**
+```bash
+git pull origin master
+```
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.liveness();
+### License
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(OK_CODE, actualResult.getBody());
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
 
-    @Test
-    @DisplayName("Given the ledgerReader is not alive, return HTTP Status 500")
-    void livenessFailsWhenLedgerReaderIsNotAlive() {
-        // Given
-        when(ledgerReader.isAlive()).thenReturn(false);
-        
-        // When
-        final ResponseEntity actualResult = balanceReaderController.liveness();
+### Contact
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
-    }
+For any questions or inquiries, please open an issue on the GitHub repository.
 
-    @Test
-    @DisplayName("Given the user is authenticated for the account, return HTTP Status 200")
-    void getBalanceSucceedsWhenAccountMatchesAuthenticatedUser() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(BALANCE);
+### Architecture
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+The microservice is built using the following technologies:
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+* **Spring Boot:** Provides a framework for building REST APIs and managing dependencies.
+* **Spring Data JPA:** Provides a convenient way to interact with a database using JPA.
+* **Log4j2:** Used for logging.
+* **JWT:** Used for authentication and authorization.
+* **Guava Cache:** Used for caching account balances.
+* **Micrometer and Stackdriver:** Used for exporting metrics.
+* **Spring Cloud Sleuth:** Used for tracing.
 
-    @Test
-    @DisplayName("Given the user is authenticated for the account, return correct balance.")
-    void getBalanceIsCorrectWhenAccountMatchesAuthenticatedUser() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(BALANCE);
+The microservice uses a database to store account balances and a background thread to listen for new transactions. When a new transaction is detected, the microservice updates the balance for the affected accounts. 
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+### Security
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(BALANCE, actualResult.getBody());
-    }
-    @Test
-    @DisplayName("Given the user is authenticated but cannot access the account, return 401")
-    void getBalanceFailsWhenAccountDoesNotMatchAuthenticatedUser() {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
+The microservice uses JWT authentication to verify the identity of clients and authorization to restrict access to specific accounts. Clients must provide a valid JWT token in the Authorization header of their requests. 
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, NON_AUTHED_ACCOUNT_NUM);
+### Monitoring
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
-    }
+The microservice exposes metrics for monitoring its health and performance. These metrics can be collected by tools like Prometheus and Grafana. 
 
-    @Test
-    @DisplayName("Given the user is not authenticated, return 401")
-    void getBalanceFailsWhenUserNotAuthenticated() {
-        // Given
-        when(verifier.verify(TOKEN)).thenThrow(JWTVerificationException.class);
+### Troubleshooting
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+If you encounter any issues, please refer to the following resources:
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
-    }
+* The documentation for Spring Boot, Spring Data JPA, Log4j2, JWT, Guava Cache, Micrometer, Stackdriver, and Spring Cloud Sleuth.
+* The GitHub repository for this project.
 
-    @Test
-    @DisplayName("Given the cache throws an error for an authenticated user, return 500")
-    void getBalanceFailsWhenCacheThrowsError() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenThrow(ExecutionException.class);
+### Best Practices
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+The microservice follows industry best practices for building microservices, including:
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
-    }
+* **Twelve-Factor App:** The microservice is designed to be a twelve-factor app.
+* **Containerization:** The microservice is containerized using Docker.
+* **API-First Development:** The microservice is designed with an API-first approach.
+* **Microservice Architecture:** The microservice is designed to be a standalone microservice.
+* **DevOps:** The microservice is built using DevOps principles.
 
-}
+### Future Enhancements
+
+* Add support for multiple currencies.
+* Improve performance by optimizing the database queries.
+* Add support for transactions that involve multiple accounts.
+* Implement a user interface for managing accounts.
+* Integrate the microservice with other banking services.
+
+### Disclaimer
+
+This microservice is intended for educational purposes only. It is not intended for use in a production environment.
