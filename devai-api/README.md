@@ -1,156 +1,98 @@
 # Devai API
 
-Devai API is a python based application that is built with FastAPI framework.
+## Description
 
-This application defines the routes for the DevAI API. 
+Devai API is a Python-based application built with the FastAPI framework. It provides a set of endpoints designed to interact with large language models and automate tasks related to code generation, documentation, and project management.
 
-The API provides two main endpoints:
+This API serves as the backend for a GenAI agent, allowing users to interact with the API via a simple interface for various tasks.
 
-`/generate`: This endpoint takes a user prompt as input and uses the Gemini 1.5 Pro model to generate code and documentation based on the prompt.
+## Features
 
-`/create-jira-issue`: This endpoint takes a user prompt as input and uses the Gemini 1.5 Pro model to generate a detailed technical prompt for a JIRA user story based on the input requirements.
+- **Code & Documentation Generation:**  The `/generate` endpoint takes a user prompt and utilizes the Gemini 1.5 Pro model to generate code and accompanying documentation based on the provided requirements.
+- **JIRA Issue Creation:** The `/create-jira-issue` endpoint accepts a user prompt and leverages the Gemini 1.5 Pro model to create a detailed technical prompt for a JIRA user story based on the input.
+- **GitLab Integration:** The `/generate` endpoint can be integrated with GitLab to automatically create merge requests with the generated code and documentation.
+- **Testing Endpoint:**  The `/test` endpoint allows for testing of the API's functionality.
 
-The API includes a `/test` endpoint for testing purposes.
+## Installation
 
-The code uses the following libraries:
+To install Devai API:
 
-- FastAPI: A web framework for building APIs in Python.
-- Google Cloud AI Platform: A cloud service for building and deploying machine learning models.
-- LangChain: A library for building and deploying language models.
-- Vertex AI: A cloud service for building and deploying machine learning models.
-- Jira: A project management tool.
-- GitLab: A code hosting platform.
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/devai-api.git
+    ```
 
-The code uses the following environment variables:
+2.  **Navigate to the project directory:**
+    ```bash
+    cd devai-api
+    ```
 
-- PROJECT_ID: The Google Cloud project ID.
-- LOCATION: The Google Cloud region.
+3.  **Create a virtual environment:**
+    ```bash
+    python3 -m venv venv-api
+    source venv-api/bin/activate
+    ```
 
-For integration with JIRA:
+4.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-- JIRA_API_TOKEN: The JIRA API token.
-- JIRA_USERNAME: The JIRA username.
-- JIRA_INSTANCE_URL: The JIRA instance URL.
-- JIRA_PROJECT_KEY: The JIRA project key.
+## Running Locally
 
-For integration with GitLab:
+**Prerequisites:**
 
-- GITLAB_URL: The GitLab URL.
-- GITLAB_REPOSITORY: The GitLab repository.
-- GITLAB_BRANCH: The GitLab branch.
-- GITLAB_BASE_BRANCH: The GitLab base branch.
+- **Google Cloud Account:** Create a Google Cloud project and enable the required services (Vertex AI, Secret Manager).
+- **JIRA Account:** Obtain a JIRA account with API access.
+- **GitLab Account:** Obtain a GitLab account with API access.
+- **LangSmith Account:** Obtain a LangSmith account and API key.
 
-For integration with LAngSmith:
+**Setup:**
 
-- LANGCHAIN_TRACING_V2: The LangChain tracing flag.
-- LANGCHAIN_ENDPOINT: The LangChain endpoint.
+1.  **Set Environment Variables:** Follow the instructions in the `local-dev.md` file to set up the required environment variables for your Google Cloud project, JIRA, GitLab, and LangSmith.
+2.  **Start the Application:**
+    ```bash
+    python run_app.py
+    ```
 
-The code uses the following secrets:
+## Deployment
 
-- LANGCHAIN_API_KEY: The LangChain API key.
-- GITLAB_PERSONAL_ACCESS_TOKEN: The GitLab personal access token.
-- JIRA_API_TOKEN: The JIRA API token.
+### Cloud Run
 
-## JIRA User story implementation
+1.  **Set up GCP Project:** Follow the instructions in the `README.md` file to set up your GCP project, enable the required services, and authenticate.
+2.  **Set Secrets:** Create secrets in Secret Manager for `JIRA_API_TOKEN`, `GITLAB_PERSONAL_ACCESS_TOKEN`, and `LANGCHAIN_API_KEY` as outlined in the `README.md` file.
+3.  **Deploy to Cloud Run:** Run the deployment command provided in the `README.md` file.
 
-![Devai API integration](../images/devai-api.png "Devai API integration")
+## Usage
 
-## Backend/API for GenAI Agent
+**API Endpoints:**
 
-![Devai API integration](../images/devai-api-slack.png "Devai API integration")
+- **`/`:** Root endpoint, returns a welcome message.
+- **`/test`:** Test endpoint, sends a query to the Gemini 1.5 model and returns the response.
+- **`/generate`:** Endpoint for code and documentation generation. Accepts a user prompt in the request body and returns the generated content.
+- **`/create-jira-issue`:** Endpoint for JIRA issue creation. Accepts a user prompt in the request body and creates a new JIRA issue with a detailed technical description.
 
-## Service deployment steps
+**Example Usage:**
 
-Set your GCP project and location:
+```bash
+# Generate code and documentation
+curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Create a simple Python program to calculate the factorial of a number."}' http://localhost:8080/generate
 
-```sh
-export PROJECT_ID=YOUR_GCP_PROJECT_ID
-export LOCATION=us-central1
+# Create a JIRA issue
+curl -X POST -H "Content-Type: application/json" -d '{"prompt": "Create a webpage to manage team off-site sessions. Session schema: id, time, topic, speaker. Provide HTML, JavaScript and CSS. Add backend API using FASTAPI framework."}' http://localhost:8080/create-jira-issue
 ```
 
-Authenticate with GCP and set project:
+## Contributing
 
-```sh
-gcloud auth login
-gcloud config set project $PROJECT_ID
-```
+Contributions are welcome! Please follow our style guide and submit pull requests. Refer to the `CONTRIBUTING.md` file for more details.
 
-Set `JIRA_API_TOKEN` and create a secret:
+## License
 
-```sh
-read -s JIRA_API_TOKEN
-export JIRA_API_TOKEN
+Devai API is released under the Apache 2.0 License. See the `LICENSE` file for more information.
 
-echo -n $JIRA_API_TOKEN | \
- gcloud secrets create JIRA_API_TOKEN \
- --data-file=-
-```
-Set `GITLAB_PERSONAL_ACCESS_TOKEN` and create a secret:
+## Contact
 
-```sh
-read -s GITLAB_PERSONAL_ACCESS_TOKEN
-export GITLAB_PERSONAL_ACCESS_TOKEN
+For any questions or feedback, please contact us at:
 
-echo -n $GITLAB_PERSONAL_ACCESS_TOKEN | \
- gcloud secrets create GITLAB_PERSONAL_ACCESS_TOKEN \
- --data-file=-
-```
-
-Set `LANGCHAIN_API_KEY` and create a secret:
-
-```sh
-read -s LANGCHAIN_API_KEY
-export LANGCHAIN_API_KEY
-
-echo -n $LANGCHAIN_API_KEY | \
- gcloud secrets create LANGCHAIN_API_KEY \
- --data-file=-
-```
-
-Set environment variables:
-```sh
-export JIRA_USERNAME="YOUR-EMAIL"
-export JIRA_INSTANCE_URL="https://YOUR-JIRA-PROJECT.atlassian.net"
-export JIRA_PROJECT_KEY="YOUR-JIRA-PROJECT-KEY"
-
-export GITLAB_URL="https://gitlab.com"
-export GITLAB_BRANCH="devai"
-export GITLAB_BASE_BRANCH="main"
-export GITLAB_REPOSITORY="GITLAB-USERID/GITLAB-REPO"
-
-export LANGCHAIN_TRACING_V2=true
-export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
-```
-
-Deploy service to Cloud Run:
-
-Change location:
-```sh
-cd ~/genai-for-developers/devai-api
-```
-
-Deploy application:
-
-```sh
-gcloud beta run deploy devai-api \
-  --source=. \
-  --region="$LOCATION" \
-  --allow-unauthenticated \
-  --service-account vertex-client \
-  --set-env-vars PROJECT_ID="$PROJECT_ID" \
-  --set-env-vars LOCATION="$LOCATION" \
-  --set-env-vars GITLAB_URL="$GITLAB_URL" \
-  --set-env-vars GITLAB_REPOSITORY="$GITLAB_REPOSITORY" \
-  --set-env-vars GITLAB_BRANCH="$GITLAB_BRANCH" \
-  --set-env-vars GITLAB_BASE_BRANCH="$GITLAB_BASE_BRANCH" \
-  --set-env-vars JIRA_USERNAME="$JIRA_USERNAME" \
-  --set-env-vars JIRA_INSTANCE_URL="$JIRA_INSTANCE_URL" \
-  --set-env-vars JIRA_PROJECT_KEY="$JIRA_PROJECT_KEY" \
-  --set-env-vars LANGCHAIN_TRACING_V2="$LANGCHAIN_TRACING_V2" \
-  --update-secrets="LANGCHAIN_API_KEY=LANGCHAIN_API_KEY:latest" \
-  --update-secrets="GITLAB_PERSONAL_ACCESS_TOKEN=GITLAB_PERSONAL_ACCESS_TOKEN:latest" \
-  --update-secrets="JIRA_API_TOKEN=JIRA_API_TOKEN:latest" \
-  --min-instances=1 \
-  --max-instances=3 \
-  --service-min-instances=1
-```
+- **GitHub Repository:** [Link to GitHub repository]
+- **Email:** [Your email address]
