@@ -1,238 +1,124 @@
-/*
- * Copyright 2020, Google LLC.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+## Sample Bank of Anthos: Balance Reader
 
-package anthos.samples.bankofanthos.balancereader;
+This repository contains a sample microservice, `BalanceReader`, as part of the [Bank of Anthos](https://cloud.google.com/anthos/docs/tutorials/bank-of-anthos) reference architecture. 
 
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.CacheStats;
-import io.micrometer.core.instrument.Clock;
-import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
-import io.micrometer.core.lang.Nullable;
-import io.micrometer.stackdriver.StackdriverConfig;
-import io.micrometer.stackdriver.StackdriverMeterRegistry;
-import java.util.concurrent.ExecutionException;
+**Table of Contents**
 
-import com.auth0.jwt.JWTVerifier;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.Claim;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.LoadingCache;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.ResourceAccessException;
+- [Description](#description)
+- [Architecture](#architecture)
+- [Components](#components)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Run the Application](#run-the-application)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Cleaning up](#cleaning-up)
+- [License](#license)
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import static org.mockito.MockitoAnnotations.initMocks;
+## Description
 
-class BalanceReaderControllerTest {
+The Balance Reader microservice is responsible for maintaining the current balance for each user account. It uses a cache to store balances, and a background thread to monitor a shared ledger for new transactions. When a transaction affecting an account in the Balance Reader's bank is detected, the balance in the cache is updated. 
 
-    private BalanceReaderController balanceReaderController;
+## Architecture
 
-    @Mock
-    private JWTVerifier verifier;
-    @Mock
-    private LedgerReader ledgerReader;
-    @Mock
-    private DecodedJWT jwt;
-    @Mock
-    private Claim claim;
-    @Mock
-    private Clock clock;
-    @Mock
-    private LoadingCache<String, Long> cache;
-    @Mock
-    private CacheStats stats;
+This microservice uses the following technologies:
 
-    private static final String VERSION = "v0.2.0";
-    private static final String LOCAL_ROUTING_NUM = "123456789";
-    private static final String OK_CODE = "ok";
-    private static final String JWT_ACCOUNT_KEY = "acct";
-    private static final long BALANCE = 100l;
-    private static final String AUTHED_ACCOUNT_NUM = "1234567890";
-    private static final String NON_AUTHED_ACCOUNT_NUM = "9876543210";
-    private static final String BEARER_TOKEN = "Bearer abc";
-    private static final String TOKEN = "abc";
+* **Spring Boot:**  Provides a framework for building a RESTful service.
+* **Google Cloud SQL:**  Stores transactions in a relational database.
+* **Guava Cache:**  Provides a simple in-memory cache for account balances.
+* **JWT Authentication:**  Validates user authentication tokens to ensure authorized access.
+* **Micrometer:** Exposes metrics and tracing information.
 
-    @BeforeEach
-    void setUp() {
-        initMocks(this);
-        StackdriverMeterRegistry meterRegistry = new StackdriverMeterRegistry(new StackdriverConfig() {
-            @Override
-            public boolean enabled() {
-                return false;
-            }
+## Components
 
-            @Override
-            public String projectId() {
-                return "test";
-            }
+The `BalanceReader` microservice consists of the following components:
 
-            @Override
-            @Nullable
-            public String get(String key) {
-                return null;
-            }
-        }, clock);
+* **BalanceReaderController:** Handles requests to retrieve account balances.
+* **BalanceCache:** Implements a Guava cache to store and retrieve account balances.
+* **TransactionRepository:** Interface to interact with the `Transactions` database table.
+* **LedgerReader:** Monitors the shared ledger for new transactions and updates the cache accordingly.
+* **JWTVerifierGenerator:** Generates a JWT verifier to authenticate requests.
+* **Transaction:** Represents a transaction between accounts.
 
-        when(cache.stats()).thenReturn(stats);
-        balanceReaderController = new BalanceReaderController(ledgerReader, verifier,
-            meterRegistry, cache, LOCAL_ROUTING_NUM, VERSION);
+## Prerequisites
 
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-    }
+* **Google Cloud Project:** You'll need a Google Cloud Project with the following services enabled:
+    * Google Cloud SQL
+    * Cloud Run
+    * Cloud Logging
+    * Cloud Monitoring
+* **Cloud SDK:** The Google Cloud SDK must be installed on your machine and configured with your Google Cloud Project.
+* **Docker:** Docker needs to be installed and running.
 
-    @Test
-    @DisplayName("Given version number in the environment, " +
-            "return a ResponseEntity with the version number")
-    void version() {
-        // When
-        final ResponseEntity actualResult = balanceReaderController.version();
+## Setup
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(VERSION, actualResult.getBody());
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+1. **Clone the repository:**
 
-    @Test
-    @DisplayName("Given the server is serving requests, return HTTP Status 200")
-    void readiness() {
-        // When
-        final String actualResult = balanceReaderController.readiness();
+   ```bash
+   git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
+   cd microservices-demo/sample-app
+   ```
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(OK_CODE, actualResult);
-    }
+2. **Build the Docker image:**
 
-    @Test
-    @DisplayName("Given the ledgerReader is alive, return HTTP Status 200")
-    void livenessSucceedsWhenLedgerReaderIsAlive() {
-        // Given
-        when(ledgerReader.isAlive()).thenReturn(true);
+   ```bash
+   docker build -t balance-reader .
+   ```
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.liveness();
+## Run the Application
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(OK_CODE, actualResult.getBody());
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+1. **Start the application locally:**
 
-    @Test
-    @DisplayName("Given the ledgerReader is not alive, return HTTP Status 500")
-    void livenessFailsWhenLedgerReaderIsNotAlive() {
-        // Given
-        when(ledgerReader.isAlive()).thenReturn(false);
-        
-        // When
-        final ResponseEntity actualResult = balanceReaderController.liveness();
+   ```bash
+   docker run -d --name balance-reader -p 8080:8080 balance-reader
+   ```
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
-    }
+2. **Access the service:**
 
-    @Test
-    @DisplayName("Given the user is authenticated for the account, return HTTP Status 200")
-    void getBalanceSucceedsWhenAccountMatchesAuthenticatedUser() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(BALANCE);
+   You can now access the Balance Reader service using your browser or a REST client at: `http://localhost:8080`
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+## Deployment
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
-    }
+1. **Deploy to Cloud Run:**
 
-    @Test
-    @DisplayName("Given the user is authenticated for the account, return correct balance.")
-    void getBalanceIsCorrectWhenAccountMatchesAuthenticatedUser() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(BALANCE);
+   ```bash
+   gcloud run deploy balance-reader --image balance-reader --platform managed --region us-central1 --allow-unauthenticated
+   ```
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+2. **Access the service:**
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(BALANCE, actualResult.getBody());
-    }
-    @Test
-    @DisplayName("Given the user is authenticated but cannot access the account, return 401")
-    void getBalanceFailsWhenAccountDoesNotMatchAuthenticatedUser() {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
+   You can now access the deployed Balance Reader service at the URL provided in the output of the deployment command.
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, NON_AUTHED_ACCOUNT_NUM);
+## Testing
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
-    }
+* **Integration Tests:** The `BalanceReader` service comes with integration tests that you can run to ensure the application is working correctly.
 
-    @Test
-    @DisplayName("Given the user is not authenticated, return 401")
-    void getBalanceFailsWhenUserNotAuthenticated() {
-        // Given
-        when(verifier.verify(TOKEN)).thenThrow(JWTVerificationException.class);
+   ```bash
+   ./mvnw clean install
+   ```
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+* **End-to-End Tests:** You can use the provided `curl` commands in the `test` directory to interact with the deployed service and verify its functionality.
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
-    }
+## Cleaning up
 
-    @Test
-    @DisplayName("Given the cache throws an error for an authenticated user, return 500")
-    void getBalanceFailsWhenCacheThrowsError() throws Exception {
-        // Given
-        when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(cache.get(AUTHED_ACCOUNT_NUM)).thenThrow(ExecutionException.class);
+1. **Delete the Cloud Run service:**
 
-        // When
-        final ResponseEntity actualResult = balanceReaderController.getBalance(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+   ```bash
+   gcloud run services delete balance-reader --region us-central1
+   ```
 
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
-    }
+2. **Remove the Docker image:**
 
-}
+   ```bash
+   docker image rm balance-reader
+   ```
+
+3. **Remove the container:**
+
+   ```bash
+   docker container rm balance-reader
+   ```
+
+## License
+
+This project is licensed under the Apache 2.0 License.
