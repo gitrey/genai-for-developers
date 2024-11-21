@@ -25,6 +25,7 @@ from google.api_core.exceptions import NotFound, PermissionDenied
 from google.api_core.gapic_v1.client_info import ClientInfo
 import logging
 
+from .constants import USER_AGENT, MODEL_NAME
 from devai.commands.github_cmd import create_github_pr
 
 USER_AGENT = 'cloud-solutions/genai-for-developers-v1.0'
